@@ -106,6 +106,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected =
 
         try {
             if (isConnected) {
+                connectionsPerIp[(ws->getUserData())->ip]++;
                 connections++;
             }
 
@@ -228,6 +229,20 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws) {
     sharedMutex.lock();
 
     try {
+        auto it = connectionsPerIp.find((ws->getUserData())->ip);
+        if (it != connectionsPerIp.end())
+        {
+            int currentCount = it->second;
+            if (currentCount > 1)
+            {
+                it->second = currentCount - 1;
+            }
+            else
+            {
+                connectionsPerIp.erase(it);
+            }
+        }
+
         --connections;
 
         std::string roomId = socketIdToRoomId[ws->getUserData()->id];
@@ -401,7 +416,6 @@ int main() {
              * see UpgradeAsync example instead. */
         },
         .open = [](auto *ws) {
-            connectionsPerIp[(ws->getUserData())->ip]++;
             /* Open event here, you may access ws->getUserData() which points to a PerSocketData struct.
              * Here we simply validate that indeed, something == 13 as set in upgrade handler. */
             std::cout << "Connected : " << static_cast<PerSocketData *>(ws->getUserData())->id << std::endl;
@@ -424,20 +438,6 @@ int main() {
         .close = [](auto *ws, int /*code*/, std::string_view /*message*/) {
             /* You may access ws->getUserData() here, but sending or
              * doing any kind of I/O with the socket is not valid. */
-            auto it = connectionsPerIp.find((ws->getUserData())->ip);
-            if (it != connectionsPerIp.end())
-            {
-                int currentCount = it->second;
-                if (currentCount > 1)
-                {
-                    it->second = currentCount - 1;
-                }
-                else
-                {
-                    connectionsPerIp.erase(it);
-                }
-            }
-
             std::cout << "Disconnected : " << static_cast<PerSocketData *>(ws->getUserData())->id << std::endl;
             handleDisconnect(ws);
         }
