@@ -111,7 +111,7 @@ void setResponseHeaders(auto *res, const std::string& origin) {
 void reconnectRemainingSocket(std::unique_lock<std::mutex>& lock, uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected = false){
         try {
             if (isConnected) {
-                connectionsPerIp[(ws->getUserData())->ip]++;
+                // connectionsPerIp[(ws->getUserData())->ip]++;
             }
 
             std::string roomType = ws->getUserData()->roomType;
@@ -231,7 +231,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected =
 
         try {
             if (isConnected) {
-                connectionsPerIp[(ws->getUserData())->ip]++;
+                // connectionsPerIp[(ws->getUserData())->ip]++;
             }
 
             std::string roomType = ws->getUserData()->roomType;
@@ -351,19 +351,19 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws) {
     std::unique_lock<std::mutex> lock(sharedMutex);
 
     try {
-        auto it = connectionsPerIp.find((ws->getUserData())->ip);
-        if (it != connectionsPerIp.end())
-        {
-            int currentCount = it->second;
-            if (currentCount > 1)
-            {
-                it->second = currentCount - 1;
-            }
-            else
-            {
-                connectionsPerIp.erase(it);
-            }
-        }
+        // auto it = connectionsPerIp.find((ws->getUserData())->ip);
+        // if (it != connectionsPerIp.end())
+        // {
+        //     int currentCount = it->second;
+        //     if (currentCount > 1)
+        //     {
+        //         it->second = currentCount - 1;
+        //     }
+        //     else
+        //     {
+        //         connectionsPerIp.erase(it);
+        //     }
+        // }
 
         std::string roomId = socketIdToRoomId[ws->getUserData()->id];
         std::string roomType = socketIdToRoomType[ws->getUserData()->id];
@@ -484,11 +484,11 @@ int main() {
             std::string roomId = std::string(req->getQuery("RID"));
             std::string socketId = std::string(req->getHeader("sec-websocket-key"));
 
-            int ipCount = connectionsPerIp[ip];
-            if (ipCount >= 3) {
-                res->writeStatus("403 Forbidden")->end(ACCESS_DENIED);
-                return;
-            }
+            // int ipCount = connectionsPerIp[ip];
+            // if (ipCount >= 3) {
+            //     res->writeStatus("403 Forbidden")->end(ACCESS_DENIED);
+            //     return;
+            // }
 
             // Room Type validation
             if (std::find(allowedRoomTypes.begin(), allowedRoomTypes.end(), roomType) == allowedRoomTypes.end()) {
