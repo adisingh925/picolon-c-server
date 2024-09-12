@@ -101,7 +101,7 @@ long long getCurrentTimeInMilliseconds() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
 }
 
-void reconnectRemainingSocket(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected = false){
+void reconnectRemainingSocket(std::unique_lock<std::mutex>& lock, uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected = false){
         try {
             if (isConnected) {
                 connectionsPerIp[(ws->getUserData())->ip]++;
@@ -441,7 +441,7 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws) {
                 socketIdToRoomId.erase(ws->getUserData()->id);
                 socketIdToRoomId.erase(remainingSocket->getUserData()->id);
                 
-                reconnectRemainingSocket(remainingSocket);
+                reconnectRemainingSocket(lock, remainingSocket);
             } else {
                 auto& waitingPeople = (roomType == PRIVATE_TEXT_CHAT_DUO) ? doubleChatRoomWaitingPeople : doubleVideoRoomWaitingPeople;
                 auto it = std::find(waitingPeople.begin(), waitingPeople.end(), ws);
