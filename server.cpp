@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <mutex>
 #include "json.hpp"
+#include <atomic>
 
 /* ws->getUserData returns one of these */
 struct PerSocketData
@@ -76,7 +77,20 @@ std::vector<uWS::WebSocket<true, true, PerSocketData> *> doubleVideoRoomWaitingP
 std::mutex sharedMutex;
 
 /** Global Variables */
-int connections = 0;
+std::atomic<int> connections(0);
+std::atomic<int> idCounter(0);
+
+void incrementConnectionCount() {
+    connections++;  // This operation is thread-safe
+}
+
+void decrementConnectionCount() {
+    connections--;  // This operation is thread-safe
+}
+
+int generateUniqueID() {
+    return idCounter.fetch_add(1);
+}
 
 /** Set Response Headers */
 void setResponseHeaders(auto *res, const std::string& origin) {
@@ -94,18 +108,10 @@ void setResponseHeaders(auto *res, const std::string& origin) {
     res->writeHeader("Permissions-Policy", 'geolocation=(self)');
 }
 
-long long getCurrentTimeInMilliseconds() {
-    // Get the current time since epoch in milliseconds
-    auto now = std::chrono::steady_clock::now();
-    auto duration = now.time_since_epoch();
-    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-}
-
 void reconnectRemainingSocket(std::unique_lock<std::mutex>& lock, uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected = false){
         try {
             if (isConnected) {
                 connectionsPerIp[(ws->getUserData())->ip]++;
-                connections++;
             }
 
             std::string roomType = ws->getUserData()->roomType;
@@ -113,7 +119,7 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex>& lock, uWS::WebSocket
 
             if (roomType == PUBLIC_TEXT_CHAT_MULTI || roomType == PRIVATE_TEXT_CHAT_MULTI) {
                 if (!ws->getUserData()->roomName.empty()) {
-                    std::string roomId = std::to_string(getCurrentTimeInMilliseconds());
+                    std::string roomId = std::to_string(generateUniqueID());
                     ws->subscribe(roomId);
                     socketIdToRoomId[ws->getUserData()->id] = roomId;
                     textChatMultiRoomIdToSockets[roomId] = {ws};
@@ -124,7 +130,7 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex>& lock, uWS::WebSocket
                     roomData.connections = 1;
                     roomData.roomId = roomId;
                     roomData.roomType = roomType;
-                    roomData.createTime = getCurrentTimeInMilliseconds();
+                    roomData.createTime = generateUniqueID();
 
                     if (roomType == PRIVATE_TEXT_CHAT_MULTI) {
                         privateRoomIdToRoomData[roomId] = roomData;
@@ -186,7 +192,7 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex>& lock, uWS::WebSocket
                 uWS::WebSocket<true, true, PerSocketData> *peerSocket = waitingPeople.back();
                 waitingPeople.pop_back();
 
-                std::string roomId = std::to_string(getCurrentTimeInMilliseconds());
+                std::string roomId = std::to_string(generateUniqueID());
 
                 auto &rooms = (roomType == PRIVATE_TEXT_CHAT_DUO ? textChatDuoRoomIdToSockets : videoChatDuoRoomIdToSockets);
                 rooms[roomId] = {ws, peerSocket};
@@ -226,7 +232,6 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected =
         try {
             if (isConnected) {
                 connectionsPerIp[(ws->getUserData())->ip]++;
-                connections++;
             }
 
             std::string roomType = ws->getUserData()->roomType;
@@ -234,7 +239,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected =
 
             if (roomType == PUBLIC_TEXT_CHAT_MULTI || roomType == PRIVATE_TEXT_CHAT_MULTI) {
                 if (!ws->getUserData()->roomName.empty()) {
-                    std::string roomId = std::to_string(getCurrentTimeInMilliseconds());
+                    std::string roomId = std::to_string(generateUniqueID());
                     ws->subscribe(roomId);
                     socketIdToRoomId[ws->getUserData()->id] = roomId;
                     textChatMultiRoomIdToSockets[roomId] = {ws};
@@ -245,7 +250,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected =
                     roomData.connections = 1;
                     roomData.roomId = roomId;
                     roomData.roomType = roomType;
-                    roomData.createTime = getCurrentTimeInMilliseconds();
+                    roomData.createTime = generateUniqueID();
 
                     if (roomType == PRIVATE_TEXT_CHAT_MULTI) {
                         privateRoomIdToRoomData[roomId] = roomData;
@@ -308,7 +313,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected =
                 uWS::WebSocket<true, true, PerSocketData> *peerSocket = waitingPeople.back();
                 waitingPeople.pop_back();
 
-                std::string roomId = std::to_string(getCurrentTimeInMilliseconds());
+                std::string roomId = std::to_string(generateUniqueID());
 
                 auto &rooms = (roomType == PRIVATE_TEXT_CHAT_DUO ? textChatDuoRoomIdToSockets : videoChatDuoRoomIdToSockets);
                 rooms[roomId] = {ws, peerSocket};
@@ -359,8 +364,6 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws) {
                 connectionsPerIp.erase(it);
             }
         }
-
-        --connections;
 
         std::string roomId = socketIdToRoomId[ws->getUserData()->id];
         std::string roomType = socketIdToRoomType[ws->getUserData()->id];
@@ -533,12 +536,12 @@ int main() {
             /* Open event here, you may access ws->getUserData() which points to a PerSocketData struct.
              * Here we simply validate that indeed, something == 13 as set in upgrade handler. */
             std::cout << "Connected : " << static_cast<PerSocketData *>(ws->getUserData())->id << std::endl;
-            
+            incrementConnectionCount();
+
             std::thread reconnectThread([ws]() {
                 reconnect(ws, true);  // Call reconnect in a new thread
             });
 
-            // Detach the thread so it runs independently
             reconnectThread.join();
         },
         .message = [](auto *ws, std::string_view message, uWS::OpCode opCode) {
@@ -559,7 +562,8 @@ int main() {
             /* You may access ws->getUserData() here, but sending or
              * doing any kind of I/O with the socket is not valid. */
             std::cout << "Disconnected : " << static_cast<PerSocketData *>(ws->getUserData())->id << std::endl;
-            
+            decrementConnectionCount();
+
             std::thread disconnectThread([ws]() {
                 handleDisconnect(ws);  // Call reconnect in a new thread
             });
