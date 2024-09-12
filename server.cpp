@@ -96,17 +96,17 @@ int generateUniqueID() {
 /** Set Response Headers */
 void setResponseHeaders(auto *res, const std::string& origin) {
     res->writeHeader("Access-Control-Allow-Origin", origin);
-    res->writeHeader("Access-Control-Allow-Methods", 'GET, OPTIONS, POST');
-    res->writeHeader("Access-Control-Allow-Headers", 'Content-Type');
+    res->writeHeader("Access-Control-Allow-Methods", "GET, OPTIONS, POST");
+    res->writeHeader("Access-Control-Allow-Headers", "Content-Type");
 
     // Security headers
     res->writeHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' https://picolon.com; script-src 'self'; style-src 'self';");
-    res->writeHeader("Strict-Transport-Security", 'max-age=31536000; includeSubDomains');
-    res->writeHeader("X-Content-Type-Options", 'nosniff');
-    res->writeHeader("X-Frame-Options", 'DENY');
-    res->writeHeader("X-XSS-Protection", '1; mode=block');
-    res->writeHeader("Referrer-Policy", 'no-referrer');
-    res->writeHeader("Permissions-Policy", 'geolocation=(self)');
+    res->writeHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    res->writeHeader("X-Content-Type-Options", "nosniff");
+    res->writeHeader("X-Frame-Options", "DENY");
+    res->writeHeader("X-XSS-Protection", "1; mode=block");
+    res->writeHeader("Referrer-Policy", "no-referrer");
+    res->writeHeader("Permissions-Policy", "geolocation=(self)");
 }
 
 void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected = false)
@@ -140,7 +140,8 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket
 
                 nlohmann::json response = {
                     {"type", YOU_ARE_CONNECTED_TO_THE_ROOM},
-                    {"roomData", roomData.toJson()}};
+                    {"roomData", roomData.toJson()}
+                };
 
                 ws->subscribe(roomId);
                 ws->send(response.dump());
@@ -166,11 +167,13 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket
 
                     nlohmann::json response = {
                         {"type", YOU_ARE_CONNECTED_TO_THE_ROOM},
-                        {"roomData", roomData.toJson()}};
+                        {"roomData", roomData.toJson()}
+                    };
 
                     /** Publish message to the room */
                     nlohmann::json publishMessage = {
-                        {"type", STRANGER_CONNECTED_TO_THE_ROOM}};
+                        {"type", STRANGER_CONNECTED_TO_THE_ROOM}
+                    };
 
                     ws->subscribe(userData->roomId);
                     ws->send(response.dump());
@@ -199,7 +202,7 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket
 
                 std::string roomId = std::to_string(generateUniqueID());
 
-                rooms.emplace(roomId, std::array<uWS::WebSocket<true, true, PerSocketData> *, 2>{ws, peerSocket});
+                rooms.emplace(roomId, std::unordered_set<uWS::WebSocket<true, true, PerSocketData> *>{ws, peerSocket});
                 socketIdToRoomId.emplace(userData->id, roomId);
                 socketIdToRoomId.emplace(peerSocket->getUserData()->id, roomId);
 
@@ -270,7 +273,8 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected =
 
                 nlohmann::json response = {
                     {"type", YOU_ARE_CONNECTED_TO_THE_ROOM},
-                    {"roomData", roomData.toJson()}};
+                    {"roomData", roomData.toJson()}
+                };
 
                 ws->subscribe(roomId);
                 ws->send(response.dump());
@@ -296,11 +300,13 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected =
 
                     nlohmann::json response = {
                         {"type", YOU_ARE_CONNECTED_TO_THE_ROOM},
-                        {"roomData", roomData.toJson()}};
+                        {"roomData", roomData.toJson()}
+                    };
 
                     /** Publish message to the room */
                     nlohmann::json publishMessage = {
-                        {"type", STRANGER_CONNECTED_TO_THE_ROOM}};
+                        {"type", STRANGER_CONNECTED_TO_THE_ROOM}
+                    };
 
                     ws->subscribe(userData->roomId);
                     ws->send(response.dump());
@@ -330,7 +336,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected =
 
                 std::string roomId = std::to_string(generateUniqueID());
 
-                rooms.emplace(roomId, std::array<uWS::WebSocket<true, true, PerSocketData> *, 2>{ws, peerSocket});
+                rooms.emplace(roomId, std::unordered_set<uWS::WebSocket<true, true, PerSocketData> *>{ws, peerSocket});
                 socketIdToRoomId.emplace(userData->id, roomId);
                 socketIdToRoomId.emplace(peerSocket->getUserData()->id, roomId);
 
@@ -339,7 +345,8 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected =
 
                 nlohmann::json duoRoomConnectedMessage = {
                     {"type", PAIRED},
-                    {"message", "You are connected to Stranger"}};
+                    {"message", "You are connected to Stranger"}
+                };
 
                 std::string duoMessageStr = duoRoomConnectedMessage.dump();
                 ws->send(duoMessageStr, uWS::OpCode::TEXT);
@@ -350,8 +357,8 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected =
                     nlohmann::json initiatorMessage = {
                         {"type", INITIATOR},
                         {"message", "You are the initiator!"}
-                    }
-                    ;
+                    };
+
                     ws->send(initiatorMessage.dump(), uWS::OpCode::TEXT);
                 }
             }
