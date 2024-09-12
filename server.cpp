@@ -16,6 +16,7 @@ struct PerSocketData
     std::string id;            /** Websocket Id */
 };
 
+/** Room Data */
 struct RoomData
 {
     std::string roomName;
@@ -36,7 +37,7 @@ struct RoomData
     }
 };
 
-/** Error Messages */
+/** Error & Broadcast Messages Messages */
 #define ACCESS_DENIED "Access Denied"
 #define RATE_LIMIT_EXCEEDED "Rate Limit Exceeded"
 #define RESOURCE_NOT_FOUND "Resource Not Found"
@@ -76,16 +77,16 @@ std::vector<uWS::WebSocket<true, true, PerSocketData> *> doubleChatRoomWaitingPe
 std::vector<uWS::WebSocket<true, true, PerSocketData> *> doubleVideoRoomWaitingPeople;
 std::mutex sharedMutex;
 
-/** Global Variables */
+/** Global ThreadSafe Variables */
 std::atomic<int> connections(0);
 std::atomic<int> idCounter(0);
 
 void incrementConnectionCount() {
-    connections++;  // This operation is thread-safe
+    connections++;  
 }
 
 void decrementConnectionCount() {
-    connections--;  // This operation is thread-safe
+    connections--;  
 }
 
 int generateUniqueID() {
@@ -108,96 +109,99 @@ void setResponseHeaders(auto *res, const std::string& origin) {
     res->writeHeader("Permissions-Policy", 'geolocation=(self)');
 }
 
-void reconnectRemainingSocket(std::unique_lock<std::mutex>& lock, uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected = false){
-        try {
-            if (isConnected) {
-                // connectionsPerIp[(ws->getUserData())->ip]++;
-            }
+void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected = false)
+{
+    try
+    {
+        auto userData = ws->getUserData();
 
-            std::string roomType = ws->getUserData()->roomType;
-            socketIdToRoomType[ws->getUserData()->id] = roomType;
+        socketIdToRoomType.emplace(userData->id, userData->roomType);
 
-            if (roomType == PUBLIC_TEXT_CHAT_MULTI || roomType == PRIVATE_TEXT_CHAT_MULTI) {
-                if (!ws->getUserData()->roomName.empty()) {
-                    std::string roomId = std::to_string(generateUniqueID());
-                    ws->subscribe(roomId);
-                    socketIdToRoomId[ws->getUserData()->id] = roomId;
-                    textChatMultiRoomIdToSockets[roomId] = {ws};
+        if (userData->roomType == PUBLIC_TEXT_CHAT_MULTI || userData->roomType == PRIVATE_TEXT_CHAT_MULTI)
+        {
+            bool isPublicRoom = (userData->roomType == PUBLIC_TEXT_CHAT_MULTI);
+            auto &roomMap = isPublicRoom ? publicRoomIdToRoomData : privateRoomIdToRoomData;
 
-                    RoomData roomData;
+            if (!userData->roomName.empty())
+            {
+                std::string roomId = std::to_string(generateUniqueID());
+                socketIdToRoomId.emplace(userData->id, roomId);
+                textChatMultiRoomIdToSockets.emplace(roomId, std::unordered_set<uWS::WebSocket<true, true, PerSocketData> *>{ws});
 
-                    roomData.roomName = ws->getUserData()->roomName;
-                    roomData.connections = 1;
-                    roomData.roomId = roomId;
-                    roomData.roomType = roomType;
-                    roomData.createTime = generateUniqueID();
+                RoomData roomData;
 
-                    if (roomType == PRIVATE_TEXT_CHAT_MULTI) {
-                        privateRoomIdToRoomData[roomId] = roomData;
-                    } else {
-                        publicRoomIdToRoomData[roomId] = roomData;
-                    }
+                roomData.roomName = userData->roomName;
+                roomData.connections = 1;
+                roomData.roomId = roomId;
+                roomData.roomType = userData->roomType;
+                roomData.createTime = generateUniqueID();
 
-                    nlohmann::json response = {
+                roomMap.emplace(roomId, std::move(roomData));
+
+                nlohmann::json response = {
                     {"type", YOU_ARE_CONNECTED_TO_THE_ROOM},
-                    {"roomData", roomData.toJson()}
-                };
+                    {"roomData", roomData.toJson()}};
 
-                // Convert to string and send
+                ws->subscribe(roomId);
                 ws->send(response.dump());
-            } else if (!ws->getUserData()->roomId.empty()) {
-                auto it = (roomType == PUBLIC_TEXT_CHAT_MULTI ? publicRoomIdToRoomData.find(ws->getUserData()->roomId) : privateRoomIdToRoomData.find(ws->getUserData()->roomId));
-                if (it != (roomType == PUBLIC_TEXT_CHAT_MULTI ? publicRoomIdToRoomData.end() : privateRoomIdToRoomData.end())) {
+            }
+            else if (!userData->roomId.empty())
+            {
+                auto it = roomMap.find(userData->roomId);
+
+                if (it != roomMap.end())
+                {
                     RoomData roomData = it->second;
-                    auto &socketsInRoom = textChatMultiRoomIdToSockets[ws->getUserData()->roomId];
+                    auto &socketsInRoom = textChatMultiRoomIdToSockets[userData->roomId];
                     socketsInRoom.insert(ws);
 
-                    socketIdToRoomId[ws->getUserData()->id] = ws->getUserData()->roomId;
-                    textChatMultiRoomIdToSockets[ws->getUserData()->roomId] = socketsInRoom;
+                    socketIdToRoomId.emplace(userData->id, userData->roomId);
+                    textChatMultiRoomIdToSockets[userData->roomId] = socketsInRoom;
 
+                    /** Updating the connection count in room */
                     roomData.connections++;
 
-                    if (roomType == PRIVATE_TEXT_CHAT_MULTI) {
-                        privateRoomIdToRoomData[ws->getUserData()->roomId] = roomData;
-                    } else {
-                        publicRoomIdToRoomData[ws->getUserData()->roomId] = roomData;
-                    }
+                    /** Assigning the updated value to the map */
+                    roomMap[userData->roomId] = roomData;
 
                     nlohmann::json response = {
                         {"type", YOU_ARE_CONNECTED_TO_THE_ROOM},
-                        {"roomData", roomData.toJson()}
-                    };
+                        {"roomData", roomData.toJson()}};
 
-                    // Publish message to the room
+                    /** Publish message to the room */
                     nlohmann::json publishMessage = {
-                        {"type", STRANGER_CONNECTED_TO_THE_ROOM}
-                    };
+                        {"type", STRANGER_CONNECTED_TO_THE_ROOM}};
 
-                    ws->subscribe(ws->getUserData()->roomId);
+                    ws->subscribe(userData->roomId);
                     ws->send(response.dump());
-                    ws->publish(ws->getUserData()->roomId, publishMessage.dump());
-                } else {
+                    ws->publish(userData->roomId, publishMessage.dump());
+                }
+                else
+                {
                     nlohmann::json response = {
                         {"type", ROOM_NOT_FOUND}
                     };
 
-                    // Send the JSON message through the WebSocket
                     ws->send(response.dump(), uWS::OpCode::TEXT);
                     ws->close();
                 }
             }
-        } else {
-            auto &waitingPeople = (roomType == PRIVATE_TEXT_CHAT_DUO ? doubleChatRoomWaitingPeople : doubleVideoRoomWaitingPeople);
-            if (!waitingPeople.empty()) {
+        }
+        else
+        {
+            auto &waitingPeople = (userData->roomType == PRIVATE_TEXT_CHAT_DUO ? doubleChatRoomWaitingPeople : doubleVideoRoomWaitingPeople);
+            auto &rooms = (userData->roomType == PRIVATE_TEXT_CHAT_DUO ? textChatDuoRoomIdToSockets : videoChatDuoRoomIdToSockets);
+
+            if (!waitingPeople.empty())
+            {
                 uWS::WebSocket<true, true, PerSocketData> *peerSocket = waitingPeople.back();
                 waitingPeople.pop_back();
 
                 std::string roomId = std::to_string(generateUniqueID());
 
-                auto &rooms = (roomType == PRIVATE_TEXT_CHAT_DUO ? textChatDuoRoomIdToSockets : videoChatDuoRoomIdToSockets);
-                rooms[roomId] = {ws, peerSocket};
-                socketIdToRoomId[ws->getUserData()->id] = roomId;
-                socketIdToRoomId[peerSocket->getUserData()->id] = roomId;
+                rooms.emplace(roomId, std::array<uWS::WebSocket<true, true, PerSocketData> *, 2>{ws, peerSocket});
+                socketIdToRoomId.emplace(userData->id, roomId);
+                socketIdToRoomId.emplace(peerSocket->getUserData()->id, roomId);
 
                 peerSocket->subscribe(roomId);
                 ws->subscribe(roomId);
@@ -207,203 +211,222 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex>& lock, uWS::WebSocket
                     {"message", "You are connected to Stranger"}
                 };
 
-                ws->send(duoRoomConnectedMessage.dump(), uWS::OpCode::TEXT);
-                peerSocket->send(duoRoomConnectedMessage.dump(), uWS::OpCode::TEXT);
+                std::string duoMessageStr = duoRoomConnectedMessage.dump();
+                ws->send(duoMessageStr, uWS::OpCode::TEXT);
+                peerSocket->send(duoMessageStr, uWS::OpCode::TEXT);
 
-                if (roomType == PRIVATE_VIDEO_CHAT_DUO) {
+                if (userData->roomType == PRIVATE_VIDEO_CHAT_DUO)
+                {
                     nlohmann::json initiatorMessage = {
                         {"type", INITIATOR},
                         {"message", "You are the initiator!"}
                     };
+
                     ws->send(initiatorMessage.dump(), uWS::OpCode::TEXT);
                 }
-            } else {
+            }
+            else
+            {
                 waitingPeople.push_back(ws);
             }
         }
-    } catch (const std::exception &e) {
+    }
+    catch (const std::exception &e)
+    {
         std::cerr << "Error in reconnect: " << e.what() << std::endl;
     }
 }
 
-void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected = false) {
-        std::unique_lock<std::mutex> lock(sharedMutex);
+void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected = false)
+{
+    std::unique_lock<std::mutex> lock(sharedMutex);
 
-        try {
-            if (isConnected) {
-                // connectionsPerIp[(ws->getUserData())->ip]++;
-            }
+    try
+    {
+        auto userData = ws->getUserData();
 
-            std::string roomType = ws->getUserData()->roomType;
-            socketIdToRoomType[ws->getUserData()->id] = roomType;
+        socketIdToRoomType.emplace(userData->id, userData->roomType);
 
-            if (roomType == PUBLIC_TEXT_CHAT_MULTI || roomType == PRIVATE_TEXT_CHAT_MULTI) {
-                if (!ws->getUserData()->roomName.empty()) {
-                    std::string roomId = std::to_string(generateUniqueID());
-                    ws->subscribe(roomId);
-                    socketIdToRoomId[ws->getUserData()->id] = roomId;
-                    textChatMultiRoomIdToSockets[roomId] = {ws};
+        if (userData->roomType == PUBLIC_TEXT_CHAT_MULTI || userData->roomType == PRIVATE_TEXT_CHAT_MULTI)
+        {
+            bool isPublicRoom = (userData->roomType == PUBLIC_TEXT_CHAT_MULTI);
+            auto &roomMap = isPublicRoom ? publicRoomIdToRoomData : privateRoomIdToRoomData;
 
-                    RoomData roomData;
+            if (!userData->roomName.empty())
+            {
+                std::string roomId = std::to_string(generateUniqueID());
+                socketIdToRoomId.emplace(userData->id, roomId);
+                textChatMultiRoomIdToSockets.emplace(roomId, std::unordered_set<uWS::WebSocket<true, true, PerSocketData> *>{ws});
 
-                    roomData.roomName = ws->getUserData()->roomName;
-                    roomData.connections = 1;
-                    roomData.roomId = roomId;
-                    roomData.roomType = roomType;
-                    roomData.createTime = generateUniqueID();
+                RoomData roomData;
 
-                    if (roomType == PRIVATE_TEXT_CHAT_MULTI) {
-                        privateRoomIdToRoomData[roomId] = roomData;
-                    } else {
-                        publicRoomIdToRoomData[roomId] = roomData;
-                    }
+                roomData.roomName = userData->roomName;
+                roomData.connections = 1;
+                roomData.roomId = roomId;
+                roomData.roomType = userData->roomType;
+                roomData.createTime = generateUniqueID();
 
-                    nlohmann::json response = {
+                roomMap.emplace(roomId, std::move(roomData));
+
+                nlohmann::json response = {
                     {"type", YOU_ARE_CONNECTED_TO_THE_ROOM},
-                    {"roomData", roomData.toJson()}
-                };
+                    {"roomData", roomData.toJson()}};
 
-                // Convert to string and send
+                ws->subscribe(roomId);
                 ws->send(response.dump());
-            } else if (!ws->getUserData()->roomId.empty()) {
-                auto it = (roomType == PUBLIC_TEXT_CHAT_MULTI ? publicRoomIdToRoomData.find(ws->getUserData()->roomId) : privateRoomIdToRoomData.find(ws->getUserData()->roomId));
-                if (it != (roomType == PUBLIC_TEXT_CHAT_MULTI ? publicRoomIdToRoomData.end() : privateRoomIdToRoomData.end())) {
+            }
+            else if (!userData->roomId.empty())
+            {
+                auto it = roomMap.find(userData->roomId);
+
+                if (it != roomMap.end())
+                {
                     RoomData roomData = it->second;
-                    auto &socketsInRoom = textChatMultiRoomIdToSockets[ws->getUserData()->roomId];
+                    auto &socketsInRoom = textChatMultiRoomIdToSockets[userData->roomId];
                     socketsInRoom.insert(ws);
 
-                    socketIdToRoomId[ws->getUserData()->id] = ws->getUserData()->roomId;
-                    textChatMultiRoomIdToSockets[ws->getUserData()->roomId] = socketsInRoom;
+                    socketIdToRoomId.emplace(userData->id, userData->roomId);
+                    textChatMultiRoomIdToSockets[userData->roomId] = socketsInRoom;
 
+                    /** Updating the connection count in room */
                     roomData.connections++;
 
-                    if (roomType == PRIVATE_TEXT_CHAT_MULTI) {
-                        privateRoomIdToRoomData[ws->getUserData()->roomId] = roomData;
-                    } else {
-                        publicRoomIdToRoomData[ws->getUserData()->roomId] = roomData;
-                    }
+                    /** Assigning the updated value to the map */
+                    roomMap[userData->roomId] = roomData;
 
                     nlohmann::json response = {
                         {"type", YOU_ARE_CONNECTED_TO_THE_ROOM},
-                        {"roomData", roomData.toJson()}
-                    };
+                        {"roomData", roomData.toJson()}};
 
-                    // Publish message to the room
+                    /** Publish message to the room */
                     nlohmann::json publishMessage = {
-                        {"type", STRANGER_CONNECTED_TO_THE_ROOM}
-                    };
+                        {"type", STRANGER_CONNECTED_TO_THE_ROOM}};
 
-                    ws->subscribe(ws->getUserData()->roomId);
+                    ws->subscribe(userData->roomId);
                     ws->send(response.dump());
-                    ws->publish(ws->getUserData()->roomId, publishMessage.dump());
-                } else {
+                    ws->publish(userData->roomId, publishMessage.dump());
+                }
+                else
+                {
                     nlohmann::json response = {
                         {"type", ROOM_NOT_FOUND}
                     };
 
-                    // Send the JSON message through the WebSocket
                     ws->send(response.dump(), uWS::OpCode::TEXT);
                     lock.unlock();
                     ws->close();
                 }
             }
-        } else {
-            auto &waitingPeople = (roomType == PRIVATE_TEXT_CHAT_DUO ? doubleChatRoomWaitingPeople : doubleVideoRoomWaitingPeople);
-            if (!waitingPeople.empty()) {
+        }
+        else
+        {
+            auto &waitingPeople = (userData->roomType == PRIVATE_TEXT_CHAT_DUO ? doubleChatRoomWaitingPeople : doubleVideoRoomWaitingPeople);
+            auto &rooms = (userData->roomType == PRIVATE_TEXT_CHAT_DUO ? textChatDuoRoomIdToSockets : videoChatDuoRoomIdToSockets);
+
+            if (!waitingPeople.empty())
+            {
                 uWS::WebSocket<true, true, PerSocketData> *peerSocket = waitingPeople.back();
                 waitingPeople.pop_back();
 
                 std::string roomId = std::to_string(generateUniqueID());
 
-                auto &rooms = (roomType == PRIVATE_TEXT_CHAT_DUO ? textChatDuoRoomIdToSockets : videoChatDuoRoomIdToSockets);
-                rooms[roomId] = {ws, peerSocket};
-                socketIdToRoomId[ws->getUserData()->id] = roomId;
-                socketIdToRoomId[peerSocket->getUserData()->id] = roomId;
+                rooms.emplace(roomId, std::array<uWS::WebSocket<true, true, PerSocketData> *, 2>{ws, peerSocket});
+                socketIdToRoomId.emplace(userData->id, roomId);
+                socketIdToRoomId.emplace(peerSocket->getUserData()->id, roomId);
 
                 peerSocket->subscribe(roomId);
                 ws->subscribe(roomId);
 
                 nlohmann::json duoRoomConnectedMessage = {
                     {"type", PAIRED},
-                    {"message", "You are connected to Stranger"}
-                };
+                    {"message", "You are connected to Stranger"}};
 
-                ws->send(duoRoomConnectedMessage.dump(), uWS::OpCode::TEXT);
-                peerSocket->send(duoRoomConnectedMessage.dump(), uWS::OpCode::TEXT);
+                std::string duoMessageStr = duoRoomConnectedMessage.dump();
+                ws->send(duoMessageStr, uWS::OpCode::TEXT);
+                peerSocket->send(duoMessageStr, uWS::OpCode::TEXT);
 
-                if (roomType == PRIVATE_VIDEO_CHAT_DUO) {
+                if (userData->roomType == PRIVATE_VIDEO_CHAT_DUO)
+                {
                     nlohmann::json initiatorMessage = {
                         {"type", INITIATOR},
                         {"message", "You are the initiator!"}
-                    };
+                    }
+                    ;
                     ws->send(initiatorMessage.dump(), uWS::OpCode::TEXT);
                 }
-            } else {
+            }
+            else
+            {
                 waitingPeople.push_back(ws);
             }
         }
-    } catch (const std::exception &e) {
+    }
+    catch (const std::exception &e)
+    {
         std::cerr << "Error in reconnect: " << e.what() << std::endl;
     }
 }
 
-void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws) {
+void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
+{
     std::unique_lock<std::mutex> lock(sharedMutex);
 
-    try {
-        // auto it = connectionsPerIp.find((ws->getUserData())->ip);
-        // if (it != connectionsPerIp.end())
-        // {
-        //     int currentCount = it->second;
-        //     if (currentCount > 1)
-        //     {
-        //         it->second = currentCount - 1;
-        //     }
-        //     else
-        //     {
-        //         connectionsPerIp.erase(it);
-        //     }
-        // }
-
+    try
+    {
         std::string roomId = socketIdToRoomId[ws->getUserData()->id];
+        socketIdToRoomId.erase(ws->getUserData()->id);
         std::string roomType = socketIdToRoomType[ws->getUserData()->id];
         socketIdToRoomType.erase(ws->getUserData()->id);
-        
-        if (!roomId.empty() && (roomType == PUBLIC_TEXT_CHAT_MULTI || roomType == PRIVATE_TEXT_CHAT_MULTI)) {
+
+        if (!roomId.empty() && (roomType == PUBLIC_TEXT_CHAT_MULTI || roomType == PRIVATE_TEXT_CHAT_MULTI))
+        {
             std::unordered_set<uWS::WebSocket<true, true, PerSocketData> *> socketsInRoom;
 
             auto it = textChatMultiRoomIdToSockets.find(roomId);
-            if (it != textChatMultiRoomIdToSockets.end()) {
+
+            if (it != textChatMultiRoomIdToSockets.end())
+            {
                 socketsInRoom = it->second;
             }
 
-            socketIdToRoomId.erase(ws->getUserData()->id);
-            
-            if (!socketsInRoom.empty()) {
-                
+            if (!socketsInRoom.empty())
+            {
                 socketsInRoom.erase(ws);
 
-                if (socketsInRoom.empty()) {
+                if (socketsInRoom.empty())
+                {
                     textChatMultiRoomIdToSockets.erase(roomId);
-                    if (roomType == PRIVATE_TEXT_CHAT_MULTI) {
+
+                    if (roomType == PRIVATE_TEXT_CHAT_MULTI)
+                    {
                         privateRoomIdToRoomData.erase(roomId);
-                    } else {
+                    }
+                    else
+                    {
                         publicRoomIdToRoomData.erase(roomId);
                     }
-                } else {
+                }
+                else
+                {
                     RoomData roomData;
 
-                    if (roomType == PRIVATE_TEXT_CHAT_MULTI) {
+                    if (roomType == PRIVATE_TEXT_CHAT_MULTI)
+                    {
                         roomData = privateRoomIdToRoomData[roomId];
-                    } else {
+                    }
+                    else
+                    {
                         roomData = publicRoomIdToRoomData[roomId];
                     }
 
                     roomData.connections--;
 
-                    if (roomType == PRIVATE_TEXT_CHAT_MULTI) {
+                    if (roomType == PRIVATE_TEXT_CHAT_MULTI)
+                    {
                         privateRoomIdToRoomData[roomId] = roomData;
-                    } else {
+                    }
+                    else
+                    {
                         publicRoomIdToRoomData[roomId] = roomData;
                     }
 
@@ -415,45 +438,51 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws) {
 
                     std::string message = jsonMessage.dump();
 
-                    for (auto* socket : socketsInRoom) {
+                    for (auto *socket : socketsInRoom)
+                    {
                         socket->send(message, uWS::OpCode::TEXT);
                     }
                 }
             }
-        } else {
-            if (!roomId.empty()) {
-                auto& rooms = (roomType == PRIVATE_TEXT_CHAT_DUO) ? textChatDuoRoomIdToSockets : videoChatDuoRoomIdToSockets;
-                auto& pair = rooms[roomId];
+        }
+        else
+        {
+            if (!roomId.empty())
+            {
+                auto &rooms = (roomType == PRIVATE_TEXT_CHAT_DUO) ? textChatDuoRoomIdToSockets : videoChatDuoRoomIdToSockets;
+                auto &pair = rooms[roomId];
 
-                auto it = pair.begin(); // Iterator to the first element
+                uWS::WebSocket<true, true, PerSocketData> *remainingSocket = nullptr;
+                for (auto *socket : pair)
+                {
+                    if (socket != ws)
+                    {
+                        remainingSocket = socket;
+                        break;
+                    }
+                }
 
-                // Access the first element
-                uWS::WebSocket<true, true, PerSocketData> *firstValue = *it;
-                ++it; // Move to the next element
-                uWS::WebSocket<true, true, PerSocketData> *secondValue = *it;
-
-                uWS::WebSocket<true, true, PerSocketData> *remainingSocket = (firstValue->getUserData()->id == ws->getUserData()->id) ? secondValue : firstValue;
-                
                 nlohmann::json jsonMessage = {
                     {"type", PEER_DISCONNECTED},
                     {"message", "Your peer is disconnected"}
                 };
 
                 remainingSocket->send(jsonMessage.dump(), uWS::OpCode::TEXT);
+
                 rooms.erase(roomId);
-                socketIdToRoomId.erase(ws->getUserData()->id);
                 socketIdToRoomId.erase(remainingSocket->getUserData()->id);
-                
+
                 reconnectRemainingSocket(lock, remainingSocket);
-            } else {
-                auto& waitingPeople = (roomType == PRIVATE_TEXT_CHAT_DUO) ? doubleChatRoomWaitingPeople : doubleVideoRoomWaitingPeople;
-                auto it = std::find(waitingPeople.begin(), waitingPeople.end(), ws);
-                if (it != waitingPeople.end()) {
-                    waitingPeople.erase(it);
-                }
+            }
+            else
+            {
+                auto &waitingPeople = (roomType == PRIVATE_TEXT_CHAT_DUO) ? doubleChatRoomWaitingPeople : doubleVideoRoomWaitingPeople;
+                waitingPeople.erase(std::remove(waitingPeople.begin(), waitingPeople.end(), ws), waitingPeople.end());
             }
         }
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception &e)
+    {
         std::cerr << "Error in handleDisconnect: " << e.what() << std::endl;
     }
 }
@@ -483,12 +512,6 @@ int main() {
             std::string roomName = std::string(req->getQuery("RN"));
             std::string roomId = std::string(req->getQuery("RID"));
             std::string socketId = std::string(req->getHeader("sec-websocket-key"));
-
-            // int ipCount = connectionsPerIp[ip];
-            // if (ipCount >= 3) {
-            //     res->writeStatus("403 Forbidden")->end(ACCESS_DENIED);
-            //     return;
-            // }
 
             // Room Type validation
             if (std::find(allowedRoomTypes.begin(), allowedRoomTypes.end(), roomType) == allowedRoomTypes.end()) {
