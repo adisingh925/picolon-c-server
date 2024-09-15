@@ -272,7 +272,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                 };
 
                 ws->subscribe(roomId);
-                ws->send(response.dump(), uWS::OpCode::TEXT);
+                ws->send(response.dump());
             }
             else if (!userData->roomId.empty())
             {
@@ -304,7 +304,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                     };
 
                     ws->subscribe(userData->roomId);
-                    ws->send(response.dump(), uWS::OpCode::TEXT);
+                    ws->send(response.dump());
                     ws->publish(userData->roomId, publishMessage.dump(), uWS::OpCode::TEXT);
                 }
                 else
