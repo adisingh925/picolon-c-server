@@ -128,7 +128,7 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket
                 roomData.roomType = userData->roomType;
                 roomData.createTime = generateUniqueID();
 
-                roomMap.emplace(roomId, std::move(roomData));
+                roomMap[roomId] = roomData;
 
                 nlohmann::json response = {
                     {"type", YOU_ARE_CONNECTED_TO_THE_ROOM},
@@ -169,7 +169,7 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket
 
                     ws->subscribe(userData->roomId);
                     ws->send(response.dump(), uWS::OpCode::TEXT);
-                    ws->publish(userData->roomId, publishMessage.dump(), uWS::OpCode::TEXT, true);
+                    ws->publish(userData->roomId, publishMessage.dump(), uWS::OpCode::TEXT);
                 }
                 else
                 {
@@ -264,7 +264,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                 roomData.roomType = userData->roomType;
                 roomData.createTime = generateUniqueID();
 
-                roomMap.emplace(roomId, std::move(roomData));
+                roomMap[roomId] = roomData;
 
                 nlohmann::json response = {
                     {"type", YOU_ARE_CONNECTED_TO_THE_ROOM},
@@ -272,7 +272,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                 };
 
                 ws->subscribe(roomId);
-                ws->send(response.dump());
+                ws->send(response.dump(), uWS::OpCode::TEXT);
             }
             else if (!userData->roomId.empty())
             {
@@ -304,7 +304,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                     };
 
                     ws->subscribe(userData->roomId);
-                    ws->send(response.dump());
+                    ws->send(response.dump(), uWS::OpCode::TEXT);
                     ws->publish(userData->roomId, publishMessage.dump(), uWS::OpCode::TEXT);
                 }
                 else
