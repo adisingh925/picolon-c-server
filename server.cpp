@@ -207,8 +207,8 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket
                 };
 
                 std::string duoMessageStr = duoRoomConnectedMessage.dump();
-                ws->send(duoMessageStr, uWS::OpCode::TEXT);
-                peerSocket->send(duoMessageStr, uWS::OpCode::TEXT);
+                ws->send(duoMessageStr, uWS::OpCode::TEXT, true);
+                peerSocket->send(duoMessageStr, uWS::OpCode::TEXT, true);
 
                 if (userData->roomType == PRIVATE_VIDEO_CHAT_DUO)
                 {
@@ -217,7 +217,7 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket
                         {"message", "You are the initiator!"}
                     };
 
-                    ws->send(initiatorMessage.dump(), uWS::OpCode::TEXT);
+                    ws->send(initiatorMessage.dump(), uWS::OpCode::TEXT, true);
                 }
             }
             else
@@ -344,8 +344,8 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                 };
 
                 std::string duoMessageStr = duoRoomConnectedMessage.dump();
-                ws->send(duoMessageStr, uWS::OpCode::TEXT);
-                peerSocket->send(duoMessageStr, uWS::OpCode::TEXT);
+                ws->send(duoMessageStr, uWS::OpCode::TEXT, true);
+                peerSocket->send(duoMessageStr, uWS::OpCode::TEXT, true);
 
                 if (userData->roomType == PRIVATE_VIDEO_CHAT_DUO)
                 {
@@ -354,7 +354,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                         {"message", "You are the initiator!"}
                     };
 
-                    ws->send(initiatorMessage.dump(), uWS::OpCode::TEXT);
+                    ws->send(initiatorMessage.dump(), uWS::OpCode::TEXT, true);
                 }
             }
             else
@@ -472,7 +472,7 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                     {"message", "Your peer is disconnected"}
                 };
 
-                remainingSocket->send(jsonMessage.dump(), uWS::OpCode::TEXT);
+                remainingSocket->send(jsonMessage.dump(), uWS::OpCode::TEXT, true);
 
                 rooms.erase(roomId);
                 socketIdToRoomId.erase(remainingSocket->getUserData()->id);
