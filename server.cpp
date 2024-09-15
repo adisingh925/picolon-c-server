@@ -502,15 +502,15 @@ int main() {
      * You may swap to using uWS:App() if you don't need SSL */
     uWS::SSLApp({
         /* There are example certificates in uWebSockets.js repo */
-	    .key_file_name = "misc/key.pem",
-	    .cert_file_name = "misc/cert.pem",
-	    .passphrase = "1234"
+	    .key_file_name = "../ssl/private.key",
+	    .cert_file_name = "../ssl/certificate.crt",
 	}).ws<PerSocketData>("/*", {
         /* Settings */
         .compression = uWS::SHARED_COMPRESSOR,
-        .maxPayloadLength = 16 * 1024,
+        .maxPayloadLength = 1048576,
         .idleTimeout = 10,
         .maxBackpressure = 1 * 1024 * 1024,
+        .maxLifetime = 0,
         /* Handlers */
         .upgrade = [](auto *res, auto *req, auto *context) {
 
@@ -519,6 +519,13 @@ int main() {
             std::string roomName = std::string(req->getQuery("RN"));
             std::string roomId = std::string(req->getQuery("RID"));
             std::string socketId = std::string(req->getHeader("sec-websocket-key"));
+
+            int ipCount = connectionsPerIp[ip];
+
+            if (ipCount >= 3) {
+                res->writeStatus("403 Forbidden")->end(ACCESS_DENIED);
+                return;
+            }
 
             // Room Type validation
             if (std::find(allowedRoomTypes.begin(), allowedRoomTypes.end(), roomType) == allowedRoomTypes.end()) {
@@ -537,6 +544,8 @@ int main() {
                     return;
                 } 
             }
+
+            connectionsPerIp[ip]++;
 
             /* You may read from req only here, and COPY whatever you need into your PerSocketData.
              * PerSocketData is valid from .open to .close event, accessed with ws->getUserData().
@@ -593,12 +602,12 @@ int main() {
              * doing any kind of I/O with the socket is not valid. */
             std::cout << "Disconnected : " << static_cast<PerSocketData *>(ws->getUserData())->id << std::endl;
             decrementConnectionCount();
+            connectionsPerIp[(ws->getUserData())->ip]--;
 
             std::thread disconnectThread([ws]() {
                 handleDisconnect(ws);  // Call reconnect in a new thread
             });
 
-            // Detach the thread so it runs independently
             disconnectThread.join();
         }
     }).get("/api/v1/connections", [](auto *res, auto *req) {
@@ -652,9 +661,9 @@ int main() {
 
         std::string responseBody = response.dump();
         res->writeStatus("404 Not Found")->writeHeader("Content-Type", "application/json")->end(responseBody);
-    }).listen(9001, [](auto *listen_socket) {
+    }).listen(443, [](auto *listen_socket) {
         if (listen_socket) {
-            std::cout << "Listening on port " << 9001 << std::endl;
+            std::cout << "Listening on port " << 443 << std::endl;
         }
     }).run();
 }
