@@ -81,14 +81,6 @@ std::mutex sharedMutex;
 std::atomic<int> connections(0);
 std::atomic<int> idCounter(0);
 
-void incrementConnectionCount() {
-    connections++;  
-}
-
-void decrementConnectionCount() {
-    connections--;  
-}
-
 int generateUniqueID() {
     return idCounter.fetch_add(1);
 }
@@ -246,7 +238,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
 
     try
     {
-        incrementConnectionCount();
+        connections++; 
         connectionsPerIp[(ws->getUserData())->ip]++;
 
         auto userData = ws->getUserData();
@@ -383,7 +375,7 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
 
     try
     {
-        decrementConnectionCount();
+        connections--; 
         connectionsPerIp[(ws->getUserData())->ip]--;
 
         std::string roomId = socketIdToRoomId[ws->getUserData()->id];
