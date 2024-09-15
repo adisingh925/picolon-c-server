@@ -109,7 +109,7 @@ void setResponseHeaders(auto *res, const std::string& origin) {
     res->writeHeader("Permissions-Policy", "geolocation=(self)");
 }
 
-void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected = false)
+void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket<true, true, PerSocketData> *ws)
 {
     try
     {
@@ -240,12 +240,15 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket
     }
 }
 
-void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isConnected = false)
+void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
 {
     std::unique_lock<std::mutex> lock(sharedMutex);
 
     try
     {
+        incrementConnectionCount();
+        connectionsPerIp[(ws->getUserData())->ip]++;
+
         auto userData = ws->getUserData();
 
         socketIdToRoomType.emplace(userData->id, userData->roomType);
@@ -380,6 +383,9 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
 
     try
     {
+        decrementConnectionCount();
+        connectionsPerIp[(ws->getUserData())->ip]--;
+
         std::string roomId = socketIdToRoomId[ws->getUserData()->id];
         socketIdToRoomId.erase(ws->getUserData()->id);
         std::string roomType = socketIdToRoomType[ws->getUserData()->id];
@@ -504,7 +510,6 @@ int main() {
         /* There are example certificates in uWebSockets.js repo */
 	    .key_file_name = "ssl/private.key",
 	    .cert_file_name = "ssl/certificate.crt",
-        .ca_file_name = "ssl/ca_bundle.crt"
 	}).ws<PerSocketData>("/*", {
         /* Settings */
         .compression = uWS::SHARED_COMPRESSOR,
@@ -546,8 +551,6 @@ int main() {
                 } 
             }
 
-            connectionsPerIp[ip]++;
-
             /* You may read from req only here, and COPY whatever you need into your PerSocketData.
              * PerSocketData is valid from .open to .close event, accessed with ws->getUserData().
              * HttpRequest (req) is ONLY valid in this very callback, so any data you will need later
@@ -576,10 +579,9 @@ int main() {
             /* Open event here, you may access ws->getUserData() which points to a PerSocketData struct.
              * Here we simply validate that indeed, something == 13 as set in upgrade handler. */
             std::cout << "Connected : " << static_cast<PerSocketData *>(ws->getUserData())->id << std::endl;
-            incrementConnectionCount();
 
             std::thread reconnectThread([ws]() {
-                reconnect(ws, true);  // Call reconnect in a new thread
+                reconnect(ws);  // Call reconnect in a new thread
             });
 
             reconnectThread.join();
@@ -602,8 +604,6 @@ int main() {
             /* You may access ws->getUserData() here, but sending or
              * doing any kind of I/O with the socket is not valid. */
             std::cout << "Disconnected : " << static_cast<PerSocketData *>(ws->getUserData())->id << std::endl;
-            decrementConnectionCount();
-            connectionsPerIp[(ws->getUserData())->ip]--;
 
             std::thread disconnectThread([ws]() {
                 handleDisconnect(ws);  // Call reconnect in a new thread
