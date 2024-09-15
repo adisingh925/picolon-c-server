@@ -136,7 +136,7 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket
                 };
 
                 ws->subscribe(roomId);
-                ws->send(response.dump());
+                ws->send(response.dump(), uWS::OpCode::TEXT);
             }
             else if (!userData->roomId.empty())
             {
@@ -168,8 +168,8 @@ void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket
                     };
 
                     ws->subscribe(userData->roomId);
-                    ws->send(response.dump());
-                    ws->publish(userData->roomId, publishMessage.dump());
+                    ws->send(response.dump(), uWS::OpCode::TEXT);
+                    ws->publish(userData->roomId, publishMessage.dump(), uWS::OpCode::TEXT, true);
                 }
                 else
                 {
@@ -272,7 +272,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                 };
 
                 ws->subscribe(roomId);
-                ws->send(response.dump());
+                ws->send(response.dump(), uWS::OpCode::TEXT);
             }
             else if (!userData->roomId.empty())
             {
@@ -304,8 +304,8 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                     };
 
                     ws->subscribe(userData->roomId);
-                    ws->send(response.dump());
-                    ws->publish(userData->roomId, publishMessage.dump());
+                    ws->send(response.dump(), uWS::OpCode::TEXT);
+                    ws->publish(userData->roomId, publishMessage.dump(), uWS::OpCode::TEXT);
                 }
                 else
                 {
