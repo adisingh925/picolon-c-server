@@ -502,8 +502,8 @@ int main() {
      * You may swap to using uWS:App() if you don't need SSL */
     uWS::SSLApp({
         /* There are example certificates in uWebSockets.js repo */
-	    .key_file_name = "../ssl/private.key",
-	    .cert_file_name = "../ssl/certificate.crt",
+	    .key_file_name = "./ssl/private.key",
+	    .cert_file_name = "./ssl/certificate.crt",
 	}).ws<PerSocketData>("/*", {
         /* Settings */
         .compression = uWS::SHARED_COMPRESSOR,
