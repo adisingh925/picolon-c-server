@@ -49,6 +49,9 @@ struct RoomData
 #define STRANGER_DISCONNECTED_FROM_THE_ROOM "STRANGER_DISCONNECTED_FROM_THE_ROOM"
 #define PEER_DISCONNECTED "PEER_DISCONNECTED"
 
+/** Other Constants */
+constexpr int MAX_CONNECTIONS_ALLOWED_FROM_SINGLE_IP = 30;
+
 /** Room Codes */
 const std::string PRIVATE_TEXT_CHAT_DUO = "0";
 const std::string PRIVATE_VIDEO_CHAT_DUO = "1";
@@ -101,12 +104,11 @@ void setResponseHeaders(auto *res, const std::string& origin) {
     res->writeHeader("Permissions-Policy", "geolocation=(self)");
 }
 
-void reconnectRemainingSocket(std::unique_lock<std::mutex> &lock, uWS::WebSocket<true, true, PerSocketData> *ws)
+void reconnectRemainingSocket(uWS::WebSocket<true, true, PerSocketData> *ws)
 {
     try
     {
         auto userData = ws->getUserData();
-
         socketIdToRoomType.emplace(userData->id, userData->roomType);
 
         if (userData->roomType == PUBLIC_TEXT_CHAT_MULTI || userData->roomType == PRIVATE_TEXT_CHAT_MULTI)
@@ -477,7 +479,7 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                 rooms.erase(roomId);
                 socketIdToRoomId.erase(remainingSocket->getUserData()->id);
 
-                reconnectRemainingSocket(lock, remainingSocket);
+                reconnectRemainingSocket(remainingSocket);
             }
             else
             {
@@ -520,12 +522,11 @@ int main() {
 
             int ipCount = connectionsPerIp[ip];
 
-            if (ipCount >= 3) {
+            if (ipCount >= MAX_CONNECTIONS_ALLOWED_FROM_SINGLE_IP) {
                 res->writeStatus("403 Forbidden")->end(ACCESS_DENIED);
                 return;
             }
 
-            // Room Type validation
             if (std::find(allowedRoomTypes.begin(), allowedRoomTypes.end(), roomType) == allowedRoomTypes.end()) {
                 res->writeStatus("403 Forbidden")->end(ACCESS_DENIED);
                 return;
@@ -645,7 +646,7 @@ int main() {
             response["code"] = 403;
             res->writeStatus("403 Forbidden")->writeHeader("Content-Type", "application/json")->end(response.dump());
         }
-	}).any("/*", [](auto *res, auto *req) {
+	}).any("/*", [](auto *res, auto /** *req */) {
         nlohmann::json response = {
             {"error", RESOURCE_NOT_FOUND},
             {"message", "The requested resource could not be found."},
