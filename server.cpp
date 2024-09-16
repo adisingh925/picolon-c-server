@@ -571,8 +571,6 @@ int main() {
         .open = [](auto *ws) {
             /* Open event here, you may access ws->getUserData() which points to a PerSocketData struct.
              * Here we simply validate that indeed, something == 13 as set in upgrade handler. */
-            std::cout << "Connected : " << static_cast<PerSocketData *>(ws->getUserData())->id << std::endl;
-
             std::thread reconnectThread([ws]() {
                 reconnect(ws);  // Call reconnect in a new thread
             });
@@ -596,8 +594,6 @@ int main() {
         .close = [](auto *ws, int /*code*/, std::string_view /*message*/) {
             /* You may access ws->getUserData() here, but sending or
              * doing any kind of I/O with the socket is not valid. */
-            std::cout << "Disconnected : " << static_cast<PerSocketData *>(ws->getUserData())->id << std::endl;
-
             std::thread disconnectThread([ws]() {
                 handleDisconnect(ws);  // Call reconnect in a new thread
             });
