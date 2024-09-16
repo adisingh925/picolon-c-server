@@ -138,7 +138,7 @@ void reconnectRemainingSocket(uWS::WebSocket<true, true, PerSocketData> *ws)
                 };
 
                 ws->subscribe(roomId);
-                ws->send(response.dump(), uWS::OpCode::TEXT, true);
+                ws->send(response.dump(), uWS::OpCode::TEXT, false);
             }
             else if (!userData->roomId.empty())
             {
@@ -170,8 +170,8 @@ void reconnectRemainingSocket(uWS::WebSocket<true, true, PerSocketData> *ws)
                     };
 
                     ws->subscribe(userData->roomId);
-                    ws->send(response.dump(), uWS::OpCode::TEXT, true);
-                    ws->publish(userData->roomId, publishMessage.dump(), uWS::OpCode::TEXT, true);
+                    ws->send(response.dump(), uWS::OpCode::TEXT, false);
+                    ws->publish(userData->roomId, publishMessage.dump(), uWS::OpCode::TEXT, false);
                 }
                 else
                 {
@@ -179,7 +179,7 @@ void reconnectRemainingSocket(uWS::WebSocket<true, true, PerSocketData> *ws)
                         {"type", ROOM_NOT_FOUND}
                     };
 
-                    ws->send(response.dump(), uWS::OpCode::TEXT, true);
+                    ws->send(response.dump(), uWS::OpCode::TEXT, false);
                     ws->close();
                 }
             }
@@ -209,8 +209,8 @@ void reconnectRemainingSocket(uWS::WebSocket<true, true, PerSocketData> *ws)
                 };
 
                 std::string duoMessageStr = duoRoomConnectedMessage.dump();
-                ws->send(duoMessageStr, uWS::OpCode::TEXT, true);
-                peerSocket->send(duoMessageStr, uWS::OpCode::TEXT, true);
+                ws->send(duoMessageStr, uWS::OpCode::TEXT, false);
+                peerSocket->send(duoMessageStr, uWS::OpCode::TEXT, false);
 
                 if (userData->roomType == PRIVATE_VIDEO_CHAT_DUO)
                 {
@@ -219,7 +219,7 @@ void reconnectRemainingSocket(uWS::WebSocket<true, true, PerSocketData> *ws)
                         {"message", "You are the initiator!"}
                     };
 
-                    ws->send(initiatorMessage.dump(), uWS::OpCode::TEXT, true);
+                    ws->send(initiatorMessage.dump(), uWS::OpCode::TEXT, false);
                 }
             }
             else
@@ -274,7 +274,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                 };
 
                 ws->subscribe(roomId);
-                ws->send(response.dump(), uWS::OpCode::TEXT, true);
+                ws->send(response.dump(), uWS::OpCode::TEXT, false);
             }
             else if (!userData->roomId.empty())
             {
@@ -306,8 +306,8 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                     };
 
                     ws->subscribe(userData->roomId);
-                    ws->send(response.dump(), uWS::OpCode::TEXT, true);
-                    ws->publish(userData->roomId, publishMessage.dump(), uWS::OpCode::TEXT, true);
+                    ws->send(response.dump(), uWS::OpCode::TEXT, false);
+                    ws->publish(userData->roomId, publishMessage.dump(), uWS::OpCode::TEXT, false);
                 }
                 else
                 {
@@ -315,7 +315,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                         {"type", ROOM_NOT_FOUND}
                     };
 
-                    ws->send(response.dump(), uWS::OpCode::TEXT, true);
+                    ws->send(response.dump(), uWS::OpCode::TEXT, false);
                     lock.unlock();
                     ws->close();
                 }
@@ -346,8 +346,8 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                 };
 
                 std::string duoMessageStr = duoRoomConnectedMessage.dump();
-                ws->send(duoMessageStr, uWS::OpCode::TEXT, true);
-                peerSocket->send(duoMessageStr, uWS::OpCode::TEXT, true);
+                ws->send(duoMessageStr, uWS::OpCode::TEXT, false);
+                peerSocket->send(duoMessageStr, uWS::OpCode::TEXT, false);
 
                 if (userData->roomType == PRIVATE_VIDEO_CHAT_DUO)
                 {
@@ -356,7 +356,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                         {"message", "You are the initiator!"}
                     };
 
-                    ws->send(initiatorMessage.dump(), uWS::OpCode::TEXT, true);
+                    ws->send(initiatorMessage.dump(), uWS::OpCode::TEXT, false);
                 }
             }
             else
@@ -447,7 +447,7 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
 
                     for (auto *socket : socketsInRoom)
                     {
-                        socket->send(message, uWS::OpCode::TEXT, true);
+                        socket->send(message, uWS::OpCode::TEXT, false);
                     }
                 }
             }
@@ -474,7 +474,7 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                     {"message", "Your peer is disconnected"}
                 };
 
-                remainingSocket->send(jsonMessage.dump(), uWS::OpCode::TEXT, true);
+                remainingSocket->send(jsonMessage.dump(), uWS::OpCode::TEXT, false);
 
                 rooms.erase(roomId);
                 socketIdToRoomId.erase(remainingSocket->getUserData()->id);
@@ -580,7 +580,7 @@ int main() {
         .message = [](auto *ws, std::string_view message, uWS::OpCode opCode) {
             /* We simply echo whatever data we get */
             std::string roomId = socketIdToRoomId[ws->getUserData()->id];
-            if (!roomId.empty()) ws->publish(roomId, message, opCode, true);
+            if (!roomId.empty()) ws->publish(roomId, message, opCode, false);
         },
         .drain = [](auto */*ws*/) {
             /* Check ws->getBufferedAmount() here */
