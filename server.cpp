@@ -50,7 +50,7 @@ struct RoomData
 #define PEER_DISCONNECTED "PEER_DISCONNECTED"
 
 /** Other Constants */
-constexpr int MAX_CONNECTIONS_ALLOWED_FROM_SINGLE_IP = 30;
+constexpr int MAX_CONNECTIONS_ALLOWED_FROM_SINGLE_IP = 100000;
 
 /** Room Codes */
 const std::string PRIVATE_TEXT_CHAT_DUO = "0";
