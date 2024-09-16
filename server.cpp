@@ -37,50 +37,53 @@ struct RoomData
     }
 };
 
-/** Error & Broadcast Messages Messages */
-#define ACCESS_DENIED "Access Denied"
-#define RATE_LIMIT_EXCEEDED "Rate Limit Exceeded"
-#define RESOURCE_NOT_FOUND "Resource Not Found"
-#define YOU_ARE_CONNECTED_TO_THE_ROOM "YOU_ARE_CONNECTED_TO_THE_ROOM"
-#define STRANGER_CONNECTED_TO_THE_ROOM "STRANGER_CONNECTED_TO_THE_ROOM"
-#define PAIRED "PAIRED"
-#define INITIATOR "INITIATOR"
-#define ROOM_NOT_FOUND "ROOM_NOT_FOUND"
-#define STRANGER_DISCONNECTED_FROM_THE_ROOM "STRANGER_DISCONNECTED_FROM_THE_ROOM"
-#define PEER_DISCONNECTED "PEER_DISCONNECTED"
+/** Error & Broadcast Messages */
+constexpr const char* ACCESS_DENIED = "Access Denied";
+constexpr const char* RATE_LIMIT_EXCEEDED = "Rate Limit Exceeded";
+constexpr const char* RESOURCE_NOT_FOUND = "Resource Not Found";
+constexpr const char* YOU_ARE_CONNECTED_TO_THE_ROOM = "YOU_ARE_CONNECTED_TO_THE_ROOM";
+constexpr const char* STRANGER_CONNECTED_TO_THE_ROOM = "STRANGER_CONNECTED_TO_THE_ROOM";
+constexpr const char* PAIRED = "PAIRED";
+constexpr const char* INITIATOR = "INITIATOR";
+constexpr const char* ROOM_NOT_FOUND = "ROOM_NOT_FOUND";
+constexpr const char* STRANGER_DISCONNECTED_FROM_THE_ROOM = "STRANGER_DISCONNECTED_FROM_THE_ROOM";
+constexpr const char* PEER_DISCONNECTED = "PEER_DISCONNECTED";
 
 /** Other Constants */
 constexpr int MAX_CONNECTIONS_ALLOWED_FROM_SINGLE_IP = 100000;
 
 /** Room Codes */
-const std::string PRIVATE_TEXT_CHAT_DUO = "0";
-const std::string PRIVATE_VIDEO_CHAT_DUO = "1";
-const std::string PUBLIC_TEXT_CHAT_MULTI = "2";
-const std::string PRIVATE_TEXT_CHAT_MULTI = "3";
+constexpr const char* PRIVATE_TEXT_CHAT_DUO = "0";
+constexpr const char* PRIVATE_VIDEO_CHAT_DUO = "1";
+constexpr const char* PUBLIC_TEXT_CHAT_MULTI = "2";
+constexpr const char* PRIVATE_TEXT_CHAT_MULTI = "3";
 
 /** Data Structures */
-std::unordered_map<std::string, int> connectionsPerIp;
-std::vector<std::string> allowedRoomTypes = {
+constexpr std::array<std::string_view, 4> allowedRoomTypes = {
     PRIVATE_TEXT_CHAT_DUO, 
     PRIVATE_VIDEO_CHAT_DUO, 
     PUBLIC_TEXT_CHAT_MULTI, 
     PRIVATE_TEXT_CHAT_MULTI
 };
-std::unordered_map<std::string, int> apiCallRateLimiter;
-std::mutex rateLimiterMutex;
-std::unordered_set<std::string> allowedOrigins = {"https://picolon.com"}; 
+
+const std::unordered_set<std::string_view> allowedOrigins = {"https://picolon.com"};
+
+// Thread-safe data structures
+std::unordered_map<std::string, int> connectionsPerIp;
 std::unordered_map<std::string, std::string> socketIdToRoomType;
 std::unordered_map<std::string, std::string> socketIdToRoomId;
-std::unordered_map<std::string, std::unordered_set<uWS::WebSocket<true, true, PerSocketData> *>> textChatMultiRoomIdToSockets;
-std::unordered_map<std::string, std::unordered_set<uWS::WebSocket<true, true, PerSocketData> *>> textChatDuoRoomIdToSockets;
-std::unordered_map<std::string, std::unordered_set<uWS::WebSocket<true, true, PerSocketData> *>> videoChatDuoRoomIdToSockets;
+std::unordered_map<std::string, std::unordered_set<uWS::WebSocket<true, true, PerSocketData>*>> textChatMultiRoomIdToSockets;
+std::unordered_map<std::string, std::unordered_set<uWS::WebSocket<true, true, PerSocketData>*>> textChatDuoRoomIdToSockets;
+std::unordered_map<std::string, std::unordered_set<uWS::WebSocket<true, true, PerSocketData>*>> videoChatDuoRoomIdToSockets;
 std::unordered_map<std::string, RoomData> publicRoomIdToRoomData;
 std::unordered_map<std::string, RoomData> privateRoomIdToRoomData;
-std::vector<uWS::WebSocket<true, true, PerSocketData> *> doubleChatRoomWaitingPeople;
-std::vector<uWS::WebSocket<true, true, PerSocketData> *> doubleVideoRoomWaitingPeople;
+std::vector<uWS::WebSocket<true, true, PerSocketData>*> doubleChatRoomWaitingPeople;
+std::vector<uWS::WebSocket<true, true, PerSocketData>*> doubleVideoRoomWaitingPeople;
+
+/** Mutex for thread-safety */
 std::mutex sharedMutex;
 
-/** Global ThreadSafe Variables */
+/** Global Thread-Safe Variables */
 std::atomic<int> connections(0);
 std::atomic<int> idCounter(0);
 
