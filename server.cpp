@@ -237,14 +237,16 @@ void reconnectRemainingSocket(uWS::WebSocket<true, true, PerSocketData> *ws)
     }
 }
 
-void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
+void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isNewConnection = false)
 {
-    std::unique_lock<std::mutex> lock(sharedMutex);
+    // std::unique_lock<std::mutex> lock(sharedMutex);
 
     try
     {
-        connections++; 
-        connectionsPerIp[(ws->getUserData())->ip]++;
+        if(isNewConnection){
+            connections++; 
+            connectionsPerIp[(ws->getUserData())->ip]++;
+        }
 
         auto userData = ws->getUserData();
 
@@ -319,7 +321,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                     };
 
                     ws->send(response.dump(), uWS::OpCode::TEXT, false);
-                    lock.unlock();
+                    // lock.unlock();
                     ws->close();
                 }
             }
@@ -482,7 +484,8 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                 rooms.erase(roomId);
                 socketIdToRoomId.erase(remainingSocket->getUserData()->id);
 
-                reconnectRemainingSocket(remainingSocket);
+                // reconnectRemainingSocket(remainingSocket);
+                reconnect(remainingSocket);
             }
             else
             {
@@ -574,8 +577,10 @@ int main() {
         .open = [](auto *ws) {
             /* Open event here, you may access ws->getUserData() which points to a PerSocketData struct.
              * Here we simply validate that indeed, something == 13 as set in upgrade handler. */
+            std::unique_lock<std::mutex> lock(sharedMutex);
+
             std::thread reconnectThread([ws]() {
-                reconnect(ws);  // Call reconnect in a new thread
+                reconnect(ws, true);  // Call reconnect in a new thread
             });
 
             reconnectThread.join();
