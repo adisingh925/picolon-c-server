@@ -50,7 +50,7 @@ constexpr const char* STRANGER_DISCONNECTED_FROM_THE_ROOM = "STRANGER_DISCONNECT
 constexpr const char* PEER_DISCONNECTED = "PEER_DISCONNECTED";
 
 /** Other Constants */
-constexpr int MAX_CONNECTIONS_ALLOWED_FROM_SINGLE_IP = 100000;
+constexpr int MAX_CONNECTIONS_ALLOWED_FROM_SINGLE_IP = 3;
 
 /** Room Codes */
 constexpr const char* PRIVATE_TEXT_CHAT_DUO = "0";
@@ -331,6 +331,7 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                 auto &pair = rooms[roomId];
 
                 uWS::WebSocket<true, true, PerSocketData> *remainingSocket = nullptr;
+
                 for (auto *socket : pair)
                 {
                     if (socket != ws)
@@ -350,7 +351,6 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
                 rooms.erase(roomId);
                 socketIdToRoomId.erase(remainingSocket->getUserData()->id);
 
-                // reconnectRemainingSocket(remainingSocket);
                 reconnect(remainingSocket);
             }
             else
@@ -370,8 +370,6 @@ void handleDisconnect(uWS::WebSocket<true, true, PerSocketData> *ws)
  * You may compile it with "WITH_OPENSSL=1 make" or with "make" */
 
 int main() {
-    /* Keep in mind that uWS::SSLApp({options}) is the same as uWS::App() when compiled without SSL support.
-     * You may swap to using uWS:App() if you don't need SSL */
     uWS::SSLApp({
         /* There are example certificates in uWebSockets.js repo */
 	    .key_file_name = "ssl/private.key",
@@ -382,10 +380,8 @@ int main() {
         .maxPayloadLength = 1048576,
         .idleTimeout = 10,
         .maxBackpressure = 1 * 1024 * 1024,
-        .maxLifetime = 0,
         /* Handlers */
         .upgrade = [](auto *res, auto *req, auto *context) {
-
             std::string ip = std::string(res->getRemoteAddressAsText());
             std::string roomType = std::string(req->getQuery("RT"));
             std::string roomName = std::string(req->getQuery("RN"));
@@ -416,12 +412,6 @@ int main() {
                 } 
             }
 
-            /* You may read from req only here, and COPY whatever you need into your PerSocketData.
-             * PerSocketData is valid from .open to .close event, accessed with ws->getUserData().
-             * HttpRequest (req) is ONLY valid in this very callback, so any data you will need later
-             * has to be COPIED into PerSocketData here. */
-
-            /* Immediately upgrading without doing anything "async" before, is simple */
             res->template upgrade<PerSocketData>({
                 /* We initialize PerSocketData struct here */
                 .ip = ip,
@@ -432,25 +422,16 @@ int main() {
             }, req->getHeader("sec-websocket-key"),
                 req->getHeader("sec-websocket-protocol"),
                 req->getHeader("sec-websocket-extensions"),
-                context);
-
-            /* If you don't want to upgrade you can instead respond with custom HTTP here,
-             * such as res->writeStatus(...)->writeHeader(...)->end(...); or similar.*/
-
-            /* Performing async upgrade, such as checking with a database is a little more complex;
-             * see UpgradeAsync example instead. */
+                context
+            );
         },
         .open = [](auto *ws) {
-            /* Open event here, you may access ws->getUserData() which points to a PerSocketData struct.
-             * Here we simply validate that indeed, something == 13 as set in upgrade handler. */
             std::thread reconnectThread([ws]() {
-                std::cout << "Listening on port " << 443 << std::endl;
                 std::unique_lock<std::mutex> lock(sharedMutex);
 
                 reconnect(ws, true);  // Call reconnect in a new thread
             });
 
-            std::cout << "Listening " << 443 << std::endl;
             reconnectThread.join();
         },
         .message = [](auto *ws, std::string_view message, uWS::OpCode opCode) {
@@ -461,17 +442,9 @@ int main() {
         .drain = [](auto */*ws*/) {
             /* Check ws->getBufferedAmount() here */
         },
-        .ping = [](auto */*ws*/, std::string_view) {
-            /* You don't need to handle this one, we automatically respond to pings as per standard */
-        },
-        .pong = [](auto */*ws*/, std::string_view) {
-            /* You don't need to handle this one either */
-        },
         .close = [](auto *ws, int /*code*/, std::string_view /*message*/) {
-            /* You may access ws->getUserData() here, but sending or
-             * doing any kind of I/O with the socket is not valid. */
             std::thread disconnectThread([ws]() {
-                handleDisconnect(ws);  // Call reconnect in a new thread
+                handleDisconnect(ws);  
             });
 
             disconnectThread.join();
