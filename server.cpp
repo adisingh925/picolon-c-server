@@ -443,12 +443,14 @@ int main() {
         .open = [](auto *ws) {
             /* Open event here, you may access ws->getUserData() which points to a PerSocketData struct.
              * Here we simply validate that indeed, something == 13 as set in upgrade handler. */
-            std::unique_lock<std::mutex> lock(sharedMutex);
-
             std::thread reconnectThread([ws]() {
+                std::cout << "Listening on port " << 443 << std::endl;
+                std::unique_lock<std::mutex> lock(sharedMutex);
+
                 reconnect(ws, true);  // Call reconnect in a new thread
             });
 
+            std::cout << "Listening " << 443 << std::endl;
             reconnectThread.join();
         },
         .message = [](auto *ws, std::string_view message, uWS::OpCode opCode) {
