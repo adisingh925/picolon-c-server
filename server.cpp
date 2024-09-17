@@ -139,7 +139,7 @@ void reconnect(uWS::WebSocket<true, true, PerSocketData> *ws, bool isNewConnecti
                 roomData.roomType = userData->roomType;
                 roomData.createTime = generateUniqueID();
 
-                roomMap[roomId] = roomData;
+                roomMap.emplace(roomId, roomData);
 
                 nlohmann::json response = {
                     {"type", YOU_ARE_CONNECTED_TO_THE_ROOM},
